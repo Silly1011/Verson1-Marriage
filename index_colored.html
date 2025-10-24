@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Marriage Joker & Maal Predictor</title>
+  <style>
+    :root{--bg:#0b0f14;--card:#131a22;--ink:#e8eef6;--muted:#9fb3c8;--accent:#4cc9f0;--good:#5dd39e;--warn:#f4d35e}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    header{position:sticky;top:0;background:linear-gradient(180deg,#0b0f148c,#0b0f1400),var(--bg);backdrop-filter:saturate(1.2) blur(6px);z-index:5}
+    .wrap{max-width:960px;margin:0 auto;padding:14px}
+    h1{font-size:20px;margin:4px 0}
+    .sub{color:var(--muted);font-size:13px;margin-top:2px}
+    .panel{background:var(--card);border:1px solid #223042;border-radius:14px;padding:12px;margin:12px 0}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .btn{appearance:none;border:1px solid #2a3a4a;background:#10161d;color:var(--ink);padding:10px 12px;border-radius:10px;font-weight:600}
+    .btn:active{transform:translateY(1px)}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .card{border:2px solid transparent;border-radius:12px;padding:8px;display:flex;align-items:center;justify-content:space-between;transition:border 0.2s, box-shadow 0.2s}
+    .card.spades{border-color:#4cc9f0}
+    .card.hearts{border-color:#e63946}
+    .card.diamonds{border-color:#f77f00}
+    .card.clubs{border-color:#5dd39e}
+    .card:hover{box-shadow:0 0 8px rgba(255,255,255,0.3)}
+    .rank{font-weight:800;font-size:16px}
+    .suit{font-size:16px}
+    .suit.spades{color:#4cc9f0}
+    .suit.hearts{color:#e63946}
+    .suit.diamonds{color:#f77f00}
+    .suit.clubs{color:#5dd39e}
+    .cnt{display:flex;align-items:center;gap:6px}
+    .pill{min-width:28px;text-align:center;border-radius:999px;padding:3px 8px;background:#16202b;border:1px solid #2a3a4a;font-weight:700}
+    .pill.warn{background:#2b2416;border-color:#4a3a2a;color:#f9e79f}
+    .pill.good{background:#162b23;border-color:#2a4a3a;color:#a8efd3}
+    .tap{font-size:12px;color:var(--muted)}
+    .twoCol{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:760px){.twoCol{grid-template-columns:1fr 1fr}}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid #243445;padding:8px;text-align:left}
+    th{color:#b8c7d9;font-size:13px}
+    tr.spades{background-color:rgba(76,201,240,0.12)}
+    tr.hearts{background-color:rgba(230,57,70,0.12)}
+    tr.diamonds{background-color:rgba(247,127,0,0.12)}
+    tr.clubs{background-color:rgba(93,211,158,0.12)}
+    .small{font-size:12px;color:var(--muted)}
+    .tag{display:inline-block;border:1px solid #2a3a4a;border-radius:999px;padding:4px 8px;margin-right:6px;margin-top:6px;color:#cbd8e6;font-size:12px}
+    .footer{color:#7e93aa;font-size:12px;margin:18px 0}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+    .chip{border:1px dashed #2a3a4a;border-radius:999px;padding:6px 10px;font-size:12px;color:#9fb3c8}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Marriage Joker & Maal Predictor</h1>
+      <div class="sub">Tap or mark cards you’ve seen. I’ll estimate which card is Tiplu (cut-joker) and predict possible <b>maal</b> (Tiplu, Jhiplu, Poplu).</div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel twoCol">
+      <div>
+        <h3 style="margin:6px 0 8px">Setup</h3>
+        <div class="chips">
+          <span class="chip" id="seenChip">0 seen</span>
+          <span class="chip" id="unseenChip">156 unseen</span>
+        </div>
+        <p class="small">Tiplu is one standard card. Jhiplu is the card one rank above Tiplu (same suit). Poplu is the card one rank below Tiplu (same suit). These three form the main <b>maal</b>.</p>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="btnClear">Clear all</button>
+        </div>
+      </div>
+      <div>
+        <h3 style="margin:6px 0 8px">Most likely Tiplu & Maal</h3>
+        <table id="probTable">
+          <thead><tr><th>#</th><th>Card</th><th>P(Tiplu)</th><th>Maal Set</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <h3 style="margin:6px 0 8px">Mark seen cards</h3>
+        <div class="tap">tap to +1 (cycles 0→1→2→3→0)</div>
+      </div>
+      <div class="grid" id="cardGrid"></div>
+    </section>
+
+    <p class="footer">Predicts Tiplu and shows its Maal set. All runs locally on device.</p>
+  </main>
+
+  <script>
+    const ranks=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+    const suits=[{"k":"♠","name":"spades"},{"k":"♥","name":"hearts"},{"k":"♦","name":"diamonds"},{"k":"♣","name":"clubs"}];
+    const suitClass={spades:'spades',hearts:'hearts',diamonds:'diamonds',clubs:'clubs'};
+    const state=new Map();
+
+    function key(r,s){return r+"_"+s}
+
+    function buildGrid(){
+      const g=document.getElementById('cardGrid');
+      g.innerHTML='';
+      ranks.forEach(r=>{
+        suits.forEach(s=>{
+          const k=key(r,s.name);
+          if(!state.has(k)) state.set(k,0);
+          const el=document.createElement('div');
+          el.className='card '+suitClass[s.name];
+          el.innerHTML=`<span><span class="rank">${r}</span> <span class="suit ${suitClass[s.name]}">${s.k}</span></span><span class="cnt"><span class="pill" id="pill_${k}">0</span></span>`;
+          el.addEventListener('click',()=>{let v=state.get(k)||0; v=(v+1)%4; state.set(k,v); updatePill(k,v); recompute();});
+          g.appendChild(el);
+        })
+      })
+    }
+
+    function updatePill(k,v){
+      const pill=document.getElementById('pill_'+k);
+      pill.textContent=v;
+      pill.className='pill ' + (v===0?'' : v===3?'good':'warn');
+    }
+
+    function totals(){
+      let seenStd=0; state.forEach(v=>seenStd+=v);
+      return {seenStd, U:156-seenStd};
+    }
+
+    function nextRank(r){
+      const i=ranks.indexOf(r);
+      return ranks[(i+1)%13];
+    }
+    function prevRank(r){
+      const i=ranks.indexOf(r);
+      return ranks[(i+12)%13];
+    }
+
+    function recompute(){
+      const {seenStd,U}=totals();
+      document.getElementById('seenChip').textContent=`${seenStd} seen`;
+      document.getElementById('unseenChip').textContent=`${156-seenStd} unseen`;
+
+      const rows=[];
+      state.forEach((v,k)=>{
+        const r=3-v;
+        if(r>0){
+          rows.push({k,r,p:r/Math.max(U,1)});
+        }
+      });
+      rows.sort((a,b)=>b.p-a.p);
+
+      const tb=document.querySelector('#probTable tbody');
+      tb.innerHTML='';
+      rows.slice(0,12).forEach((row,i)=>{
+        const [rank,suit]=row.k.split('_');
+        const suitSym={spades:'♠',hearts:'♥',diamonds:'♦',clubs:'♣'}[suit];
+        const suitCls=suitClass[suit];
+        const jhiplu=nextRank(rank)+suitSym;
+        const poplu=prevRank(rank)+suitSym;
+        const tr=document.createElement('tr');
+        tr.className=suitCls;
+        tr.innerHTML=`<td>${i+1}</td><td><b>${rank}<span class="suit ${suitCls}">${suitSym}</span></b></td><td>${(row.p*100).toFixed(2)}%</td><td>${rank}${suitSym}, ${jhiplu}, ${poplu}</td>`;
+        tb.appendChild(tr);
+      })
+    }
+
+    function clearAll(){state.forEach((_,k)=>state.set(k,0));document.querySelectorAll('.pill').forEach(p=>{p.textContent='0';p.className='pill';});recompute();}
+
+    buildGrid();
+    recompute();
+    document.getElementById('btnClear').addEventListener('click',clearAll);
+  </script>
+</body>
+</html>
