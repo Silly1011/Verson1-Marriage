@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Marriage Joker Estimator</title>
+  <style>
+    :root{--bg:#0b0f14;--card:#131a22;--ink:#e8eef6;--muted:#9fb3c8;--accent:#4cc9f0;--good:#5dd39e;--warn:#f4d35e}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    header{position:sticky;top:0;background:linear-gradient(180deg,#0b0f148c,#0b0f1400),var(--bg);backdrop-filter:saturate(1.2) blur(6px);z-index:5}
+    .wrap{max-width:960px;margin:0 auto;padding:14px}
+    h1{font-size:20px;margin:4px 0}
+    .sub{color:var(--muted);font-size:13px;margin-top:2px}
+    .panel{background:var(--card);border:1px solid #223042;border-radius:14px;padding:12px;margin:12px 0}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .btn{appearance:none;border:1px solid #2a3a4a;background:#10161d;color:var(--ink);padding:10px 12px;border-radius:10px;font-weight:600}
+    .btn:active{transform:translateY(1px)}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .card{background:#0f151d;border:1px solid #223042;border-radius:12px;padding:8px;display:flex;align-items:center;justify-content:space-between}
+    .rank{font-weight:800;font-size:16px}
+    .suit{font-size:16px}
+    .cnt{display:flex;align-items:center;gap:6px}
+    .pill{min-width:28px;text-align:center;border-radius:999px;padding:3px 8px;background:#16202b;border:1px solid #2a3a4a;font-weight:700}
+    .pill.warn{background:#2b2416;border-color:#4a3a2a;color:#f9e79f}
+    .pill.good{background:#162b23;border-color:#2a4a3a;color:#a8efd3}
+    .tap{font-size:12px;color:var(--muted)}
+    .twoCol{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:760px){.twoCol{grid-template-columns:1fr 1fr}}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid #243445;padding:8px;text-align:left}
+    th{color:#b8c7d9;font-size:13px}
+    .small{font-size:12px;color:var(--muted)}
+    .tag{display:inline-block;border:1px solid #2a3a4a;border-radius:999px;padding:4px 8px;margin-right:6px;margin-top:6px;color:#cbd8e6;font-size:12px}
+    .footer{color:#7e93aa;font-size:12px;margin:18px 0}
+    .switch{display:inline-flex;gap:8px;align-items:center}
+    input[type=checkbox]{width:18px;height:18px}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+    .chip{border:1px dashed #2a3a4a;border-radius:999px;padding:6px 10px;font-size:12px;color:#9fb3c8}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Marriage Joker Estimator</h1>
+      <div class="sub">Tap the cards you’ve <b>seen</b> (in your hand, discards, or shown). I’ll estimate which specific card is the hidden <b>Tiplu</b> (cut‑joker).</div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel twoCol">
+      <div>
+        <h3 style="margin:6px 0 8px">Setup</h3>
+        <div class="row" style="gap:12px 16px">
+          <label class="switch"><input type="checkbox" id="useExtraJokers" checked> <span>Deck includes <b>Putali</b> (3× normal + 1× special)</span></label>
+        </div>
+        <div class="chips">
+          <span class="chip">156 total cards (3×52)</span>
+          <span class="chip" id="seenChip">0 seen</span>
+          <span class="chip" id="unseenChip">156 unseen</span>
+        </div>
+        <p class="small" style="margin-top:8px">Assumptions: Tiplu is one standard card (not a printed joker). There are three copies of every standard card in the 3‑deck shoe. If you’ve seen k copies of a specific card, its probability of being the Tiplu is proportional to (3−k).</p>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="btnClear">Clear all</button>
+          <button class="btn" id="btnMarkHand">Quick‑mark 21 cards</button>
+          <button class="btn" id="btnShare">Share/Copy state</button>
+          <input class="btn" id="stateImport" type="file" accept="application/json" style="padding:8px"/>
+        </div>
+      </div>
+      <div>
+        <h3 style="margin:6px 0 8px">Most likely Tiplu (live)</h3>
+        <table id="probTable">
+          <thead><tr><th>#</th><th>Card</th><th>P(Tiplu)</th><th>Copies unseen</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="small" style="margin-top:6px">Tip: After someone shows 3 pure sets and peeks, you can freeze your state for post‑game review.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <h3 style="margin:6px 0 8px">Mark seen cards</h3>
+        <div class="tap">tap to +1 (cycles 0→1→2→3→0)</div>
+      </div>
+      <div class="grid" id="cardGrid"></div>
+    </section>
+
+    <section class="panel">
+      <h3 style="margin:6px 0 8px">What this model does</h3>
+      <ul class="small" style="margin:0 0 6px 18px;line-height:1.5">
+        <li>Starts with a uniform prior over all 156 cards; Tiplu must be a <i>standard</i> card (52 faces × 3 copies).</li>
+        <li>Every time you mark a card you’ve seen, it reduces the remaining copies that could be the hidden Tiplu.</li>
+        <li>For a specific face (e.g., J♦), if <b>r</b> of its 3 copies remain unseen and <b>U</b> total cards remain unseen, then P(Tiplu = J♦) = r ⁄ U.</li>
+        <li>You can sum by rank to get P(Tiplu rank = J) by adding the four suits’ probabilities in the table export.</li>
+      </ul>
+      <div class="tag">Planned add‑ons: expected Maal value, alter/jhiplu/poplu odds, CSV export</div>
+    </section>
+
+    <p class="footer">Built for quick on‑phone estimation during Nepali <b>Marriage</b>. No data leaves your device.</p>
+  </main>
+
+  <script>
+    const ranks=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+    const suits=[{"k":"♠","name":"spades"},{"k":"♥","name":"hearts"},{"k":"♦","name":"diamonds"},{"k":"♣","name":"clubs"}];
+
+    // state holds seen counts for each standard card (0..3). Printed jokers are not candidates for Tiplu, but toggle affects totals only for your info chips.
+    const state = new Map();
+
+    function key(r,s){return r+"_"+s}
+
+    function buildGrid(){
+      const g=document.getElementById('cardGrid');
+      g.innerHTML='';
+      ranks.forEach(r=>{
+        suits.forEach(s=>{
+          const k=key(r,s.name);
+          if(!state.has(k)) state.set(k,0);
+          const el=document.createElement('div');
+          el.className='card';
+          el.innerHTML = `
+            <span><span class="rank">${r}</span> <span class="suit">${s.k}</span></span>
+            <span class="cnt">
+              <span class="pill" id="pill_${k}">0</span>
+            </span>`;
+          el.addEventListener('click',()=>{
+            let v=state.get(k)||0; v=(v+1)%4; state.set(k,v); updatePill(k,v); recompute();
+          });
+          g.appendChild(el);
+        })
+      })
+    }
+
+    function updatePill(k,v){
+      const pill=document.getElementById('pill_'+k);
+      pill.textContent=v;
+      pill.className='pill ' + (v===0?'' : v===3?'good':'warn');
+    }
+
+    function totals(){
+      let seenStd=0; state.forEach(v=>seenStd+=v);
+      const includePutali = document.getElementById('useExtraJokers').checked;
+      const totalCards = 156 + (includePutali?4:0); // visual only
+      const unseen = totalCards - seenStd; // we only track standard cards; assume no printed jokers are seen unless user ignores
+      return {seenStd, unseen, U: 156 - seenStd}; // U = unseen standard cards (Tiplu candidates)
+    }
+
+    function recompute(){
+      const {seenStd, unseen, U} = totals();
+      document.getElementById('seenChip').textContent = `${seenStd} seen`;
+      document.getElementById('unseenChip').textContent = `${unseen} unseen`;
+
+      const rows=[];
+      state.forEach((v,k)=>{
+        const r=3-v; // copies unseen for this face
+        if(r>0){
+          rows.push({k, r, p: r/Math.max(U,1)});
+        }
+      });
+      rows.sort((a,b)=>b.p-a.p);
+      const tb=document.querySelector('#probTable tbody');
+      tb.innerHTML='';
+      rows.slice(0,12).forEach((row,i)=>{
+        const [rank,suit]=row.k.split('_');
+        const suitSym = {spades:'♠',hearts:'♥',diamonds:'♦',clubs:'♣'}[suit];
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${i+1}</td><td><b>${rank}${suitSym}</b></td><td>${(row.p*100).toFixed(2)}%</td><td>${row.r}</td>`;
+        tb.appendChild(tr);
+      })
+    }
+
+    function clearAll(){ state.forEach((_,k)=>state.set(k,0)); document.querySelectorAll('.pill').forEach(p=>{p.textContent='0';p.className='pill';}); recompute(); }
+
+    function quickMark(n=21){
+      // Marks first n cards in order as seen (for quick demo); user can adjust.
+      let c=0; for(const k of state.keys()){ if(c>=n) break; state.set(k,(state.get(k)||0)+1); updatePill(k,state.get(k)); c++; } recompute();
+    }
+
+    function share(){
+      const payload={v:1, data:Object.fromEntries(state)};
+      const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download='marriage_joker_state.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }
+
+    function importState(file){
+      const reader=new FileReader();
+      reader.onload=(e)=>{
+        try{
+          const obj=JSON.parse(e.target.result);
+          if(obj && obj.data){
+            Object.entries(obj.data).forEach(([k,v])=>{ if(state.has(k)){ state.set(k, Math.max(0, Math.min(3, Number(v)||0))); updatePill(k,state.get(k)); }});
+            recompute();
+          }
+        }catch(err){ alert('Invalid file.'); }
+      };
+      reader.readAsText(file);
+    }
+
+    // init
+    buildGrid();
+    recompute();
+
+    document.getElementById('btnClear').addEventListener('click',clearAll);
+    document.getElementById('btnMarkHand').addEventListener('click',()=>quickMark(21));
+    document.getElementById('btnShare').addEventListener('click',share);
+    document.getElementById('stateImport').addEventListener('change',e=>{ if(e.target.files[0]) importState(e.target.files[0]); });
+    document.getElementById('useExtraJokers').addEventListener('change',recompute);
+  </script>
+</body>
+</html>
